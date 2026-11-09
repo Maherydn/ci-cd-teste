@@ -1,0 +1,84 @@
+
+name: CD - Continuous Deployment
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy
+
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      contains(fromJSON('["main","master"]'),
+      github.event.workflow_run.head_branch)
+
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Récupérer le commit validé par le CI
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      # 2. Initialiser Docker Buildx
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 3. Connexion à GHCR
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 4. Construire et publier l'image Docker
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/landing-page:${{ github.event.workflow_run.head_sha }}
+            ghcr.io/${{ github.repository_owner }}/landing-page:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # 5. Déploiement sur le VPS
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/landing-page
+          TAG: ${{ github.event.workflow_run.head_sha }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: IMAGE,TAG
+          script: |
+            set -e
+
+            # Récupération de la nouvelle image
+            docker pull "$IMAGE:$TAG"
+
+            # Arrêt de l'ancienne version
+            docker stop landing-page || true
+            docker rm landing-page || true
+
+            # Lancement de la nouvelle version
+            docker run -d \
+              --name landing-page \
+              --restart unless-stopped \
+              -p 80:80 \
+              "$IMAGE:$TAG"
+
+            echo "Deployment completed successfully"

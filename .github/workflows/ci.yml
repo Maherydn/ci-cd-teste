@@ -1,0 +1,25 @@
+name: CI - Continuous Integration
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  lint-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Configuration de Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Tester le build Docker (sans push)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: landing-page:test
