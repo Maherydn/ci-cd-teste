@@ -3,7 +3,7 @@ name: CD - Continuous Deployment
 
 on:
   workflow_run:
-    workflows: ["CI - Continuous Integration"]        
+    workflows: ["CI - Continuous Integration"]
     types: [completed]
 
 permissions:
@@ -48,8 +48,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/landing-page:${{ github.event.workflow_run.head_sha }}
-            ghcr.io/${{ github.repository_owner }}/landing-page:latest
+            ghcr.io/maherydn/landing-page:${{ github.event.workflow_run.head_sha }}
+            ghcr.io/maherydn/landing-page:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -57,7 +57,7 @@ jobs:
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.2.2
         env:
-          IMAGE: ghcr.io/${{ github.repository_owner }}/landing-page
+          IMAGE: ghcr.io/maherydn/landing-page
           TAG: ${{ github.event.workflow_run.head_sha }}
         with:
           host: ${{ secrets.SERVER_HOST }}
